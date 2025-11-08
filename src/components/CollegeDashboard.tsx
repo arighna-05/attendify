@@ -67,6 +67,30 @@ export function CollegeDashboard({ data, onDataChange, ecaCount }: CollegeDashbo
     });
     onDataChange({ ...data, subjects: updatedSubjects });
   };
+  // ✏️ Edit Subject function
+const editSubject = (subjectId: string) => {
+  const subject = data.subjects.find((s) => s.id === subjectId);
+  if (!subject) return;
+
+  const newTotal = parseInt(
+    prompt("Enter new total classes:", subject.totalClasses.toString()) || "",
+    10
+  );
+  const newAttended = parseInt(
+    prompt("Enter new attended classes:", subject.attendedClasses.toString()) || "",
+    10
+  );
+
+  if (!isNaN(newTotal) && !isNaN(newAttended)) {
+    const updatedSubjects = data.subjects.map((s) =>
+      s.id === subjectId
+        ? { ...s, totalClasses: newTotal, attendedClasses: newAttended }
+        : s
+    );
+
+    onDataChange({ ...data, subjects: updatedSubjects });
+  }
+};
 
   // Calculate overall stats
   const totalClasses = data.subjects.reduce((sum, subject) => sum + subject.totalClasses, 0);
@@ -305,6 +329,15 @@ export function CollegeDashboard({ data, onDataChange, ecaCount }: CollegeDashbo
                         >
                           <XCircle className="w-4 h-4 mr-2" />
                           Absent
+                        </Button>
+                      </div>
+                      <div className="pt-2">
+                        <Button
+                        variant="secondary"
+                        className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-md"
+                        onClick={() => editSubject(subject.id)}
+                        >
+                          ✏️ Edit Subject
                         </Button>
                       </div>
                     </div>
