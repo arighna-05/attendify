@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { OnboardingScreen } from './components/OnboardingScreen';
 import { SchoolDashboard } from './components/SchoolDashboard';
 import { CollegeDashboard } from './components/CollegeDashboard';
@@ -6,6 +6,20 @@ import { SubjectsScreen } from './components/SubjectsScreen';
 import { ECASection } from './components/ECASection';
 import { StatsScreen } from './components/StatsScreen';
 import { Navigation } from './components/Navigation';
+import { AuthModal } from './components/AuthModal';
+import { supabase, isSupabaseConfigured } from './lib/supabase';
+import {
+  fetchUserProfile,
+  saveUserProfile,
+  fetchSchoolData,
+  saveSchoolData,
+  fetchCollegeData,
+  saveCollegeData,
+  defaultSchoolWeeks,
+  STORAGE_KEYS,
+} from './services/dataService';
+import { Cloud, CloudOff, Loader2, LogOut, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Toaster } from 'sonner';
 
 export interface UserProfile {
   fullName: string;
@@ -13,14 +27,19 @@ export interface UserProfile {
   userType: 'school' | 'college';
 }
 
-export interface WeekAttendance {
-  [day: string]: boolean;
-}
+export type DayStatus = "present" | "absent" | "holiday";
 
 export interface Week {
   weekNumber: number;
   startDate: string;
-  attendance: WeekAttendance;
+  attendance: {
+    monday: DayStatus;
+    tuesday: DayStatus;
+    wednesday: DayStatus;
+    thursday: DayStatus;
+    friday: DayStatus;
+    saturday: DayStatus;
+  };
 }
 
 export interface CollegeSubject {
@@ -33,150 +52,224 @@ export interface CollegeSubject {
 export interface CollegeData {
   subjects: CollegeSubject[];
   minimumGoal: number;
+  subjectAttendance?: SubjectAttendance[];
 }
 
-// localStorage keys
-const STORAGE_KEYS = {
-  USER_PROFILE: 'attendify_user_profile',
-  SCHOOL_WEEKS: 'attendify_school_weeks',
-  SCHOOL_CURRENT_WEEK: 'attendify_school_current_week',
-  SCHOOL_PREVIOUS_ATTENDED: 'attendify_school_previous_attended',
-  SCHOOL_PREVIOUS_TOTAL: 'attendify_school_previous_total',
-  COLLEGE_DATA: 'attendify_college_data',
-  ECA_COUNT: 'attendify_eca_count',
-};
+export interface SubjectAttendance {
+  subjectId: string;
+  weeklyRecords: Record<string, boolean>;
+}
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [userEmail, setUserEmail] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'home' | 'subjects' | 'eca' | 'stats'>('home');
-  
-  // School data - multiple weeks + mid-session join
-  type DayStatus = "present" | "absent" | "holiday";
+  const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('offline');
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalTab, setAuthModalTab] = useState<'signin' | 'signup'>('signin');
 
-  interface Week {
-    weekNumber: number;
-    startDate: string;
-    attendance: {
-      monday: DayStatus;
-      tuesday: DayStatus;
-      wednesday: DayStatus;
-      thursday: DayStatus;
-      friday: DayStatus;
-      saturday: DayStatus;
-    };
-  }
+  // School data
   const [saturdayEnabled, setSaturdayEnabled] = useState(true);
-  const [schoolWeeks, setSchoolWeeks] = useState<Week[]>([
-    {
-      weekNumber: 1,
-      startDate: new Date().toISOString(),
-      attendance: {
-        monday: "absent",
-        tuesday: "absent",
-        wednesday: "absent",
-        thursday: "absent",
-        friday: "absent",
-        saturday: "absent",
-      },
-    },
-  ]);
+  const [schoolWeeks, setSchoolWeeks] = useState<Week[]>(defaultSchoolWeeks());
   const [currentSchoolWeek, setCurrentSchoolWeek] = useState(1);
   const [previousAttended, setPreviousAttended] = useState<number>(0);
   const [previousTotal, setPreviousTotal] = useState<number>(0);
 
-  // College data - simple subject-based tracking
+  // College data
   const [collegeData, setCollegeData] = useState<CollegeData>({
     subjects: [],
     minimumGoal: 75,
   });
-
   const [ecaCount, setEcaCount] = useState<number>(0);
 
-  // Load all data from localStorage on mount
+  // Ref to skip initial autosave triggers on mount
+  const isInitialLoadDone = useRef(false);
+  const schoolDebounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const collegeDebounceTimer = useRef<NodeJS.Timeout | null>(null);
+
+  // 1. Load initial data on mount (Supabase or localStorage)
   useEffect(() => {
-    try {
-      // Load user profile
-      const savedUser = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-      if (savedUser) {
-        setUser(JSON.parse(savedUser));
+    let isMounted = true;
+
+    async function loadData() {
+      setIsLoading(true);
+      let currentUid: string | null = null;
+      let email: string | null = null;
+
+      if (isSupabaseConfigured()) {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            currentUid = session.user.id;
+            email = session.user.email ?? null;
+            if (isMounted) {
+              setUserId(currentUid);
+              setUserEmail(email);
+            }
+          }
+        } catch (err) {
+          console.warn('Error fetching Supabase session:', err);
+        }
       }
 
-      // Load school data
-      const savedSchoolWeeks = localStorage.getItem(STORAGE_KEYS.SCHOOL_WEEKS);
-      if (savedSchoolWeeks) {
-        setSchoolWeeks(JSON.parse(savedSchoolWeeks));
+      // Load Profile
+      const profile = await fetchUserProfile(currentUid || undefined);
+      if (isMounted && profile) {
+        setUser(profile);
       }
 
-      const savedCurrentWeek = localStorage.getItem(STORAGE_KEYS.SCHOOL_CURRENT_WEEK);
-      if (savedCurrentWeek) {
-        setCurrentSchoolWeek(parseInt(savedCurrentWeek));
+      // Load School Data
+      const schoolData = await fetchSchoolData(currentUid || undefined);
+      if (isMounted && schoolData) {
+        setSchoolWeeks(schoolData.weeks);
+        setCurrentSchoolWeek(schoolData.currentWeek);
+        setPreviousAttended(schoolData.previousAttended);
+        setPreviousTotal(schoolData.previousTotal);
+        setSaturdayEnabled(schoolData.saturdayEnabled);
       }
 
-      const savedPreviousAttended = localStorage.getItem(STORAGE_KEYS.SCHOOL_PREVIOUS_ATTENDED);
-      if (savedPreviousAttended) {
-        setPreviousAttended(parseInt(savedPreviousAttended));
+      // Load College Data
+      const loadedCollegeData = await fetchCollegeData(currentUid || undefined);
+      if (isMounted && loadedCollegeData) {
+        setCollegeData(loadedCollegeData.collegeData);
+        setEcaCount(loadedCollegeData.ecaCount);
       }
 
-      const savedPreviousTotal = localStorage.getItem(STORAGE_KEYS.SCHOOL_PREVIOUS_TOTAL);
-      if (savedPreviousTotal) {
-        setPreviousTotal(parseInt(savedPreviousTotal));
+      if (isMounted) {
+        setIsLoading(false);
+        setSyncStatus(currentUid ? 'synced' : 'offline');
+        // Mark initial load finished after small tick so watchers don't trigger re-saves
+        setTimeout(() => {
+          isInitialLoadDone.current = true;
+        }, 100);
       }
-
-      // Load college data
-      const savedCollegeData = localStorage.getItem(STORAGE_KEYS.COLLEGE_DATA);
-      if (savedCollegeData) {
-        setCollegeData(JSON.parse(savedCollegeData));
-      }
-
-      // Load ECA count
-      const savedEcaCount = localStorage.getItem(STORAGE_KEYS.ECA_COUNT);
-      if (savedEcaCount) {
-        setEcaCount(parseInt(savedEcaCount));
-      }
-    } catch (error) {
-      console.error('Error loading data from localStorage:', error);
-    } finally {
-      setIsLoading(false);
     }
+
+    loadData();
+
+    // Setup Supabase auth listener
+    let authSubscription: any = null;
+    if (isSupabaseConfigured()) {
+      const { data } = supabase.auth.onAuthStateChange(async (event, session) => {
+        if (!isMounted) return;
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          if (session?.user) {
+            const uid = session.user.id;
+            setUserId(uid);
+            setUserEmail(session.user.email ?? null);
+
+            // Fetch fresh cloud data
+            const profile = await fetchUserProfile(uid);
+            if (profile) setUser(profile);
+
+            const school = await fetchSchoolData(uid);
+            if (school) {
+              setSchoolWeeks(school.weeks);
+              setCurrentSchoolWeek(school.currentWeek);
+              setPreviousAttended(school.previousAttended);
+              setPreviousTotal(school.previousTotal);
+              setSaturdayEnabled(school.saturdayEnabled);
+            }
+
+            const college = await fetchCollegeData(uid);
+            if (college) {
+              setCollegeData(college.collegeData);
+              setEcaCount(college.ecaCount);
+            }
+
+            setSyncStatus('synced');
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setUserId(null);
+          setUserEmail(null);
+          setSyncStatus('offline');
+        }
+      });
+      authSubscription = data.subscription;
+    }
+
+    return () => {
+      isMounted = false;
+      authSubscription?.unsubscribe?.();
+    };
   }, []);
 
-  // Save user profile to localStorage whenever it changes
+  // 2. Autosave user profile
   useEffect(() => {
-    if (user) {
-      localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(user));
+    if (!isInitialLoadDone.current || !user) return;
+    saveUserProfile(userId || undefined, user);
+  }, [user, userId]);
+
+  // 3. Debounced Autosave for School Data
+  useEffect(() => {
+    if (!isInitialLoadDone.current) return;
+
+    const payload = {
+      weeks: schoolWeeks,
+      currentWeek: currentSchoolWeek,
+      previousAttended,
+      previousTotal,
+      saturdayEnabled,
+    };
+
+    if (userId) {
+      setSyncStatus('syncing');
+      if (schoolDebounceTimer.current) {
+        clearTimeout(schoolDebounceTimer.current);
+      }
+      schoolDebounceTimer.current = setTimeout(async () => {
+        try {
+          await saveSchoolData(userId, payload);
+          setSyncStatus('synced');
+        } catch {
+          setSyncStatus('error');
+        }
+      }, 600);
+    } else {
+      // Offline mode: immediate local save
+      saveSchoolData(undefined, payload);
+      setSyncStatus('offline');
     }
-  }, [user]);
 
-  // Save school weeks to localStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SCHOOL_WEEKS, JSON.stringify(schoolWeeks));
-  }, [schoolWeeks]);
+    return () => {
+      if (schoolDebounceTimer.current) clearTimeout(schoolDebounceTimer.current);
+    };
+  }, [schoolWeeks, currentSchoolWeek, previousAttended, previousTotal, saturdayEnabled, userId]);
 
-  // Save current week to localStorage
+  // 4. Debounced Autosave for College Data
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SCHOOL_CURRENT_WEEK, currentSchoolWeek.toString());
-  }, [currentSchoolWeek]);
+    if (!isInitialLoadDone.current) return;
 
-  // Save previous attended to localStorage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SCHOOL_PREVIOUS_ATTENDED, previousAttended.toString());
-  }, [previousAttended]);
+    const payload = {
+      collegeData,
+      ecaCount,
+    };
 
-  // Save previous total to localStorage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.SCHOOL_PREVIOUS_TOTAL, previousTotal.toString());
-  }, [previousTotal]);
+    if (userId) {
+      setSyncStatus('syncing');
+      if (collegeDebounceTimer.current) {
+        clearTimeout(collegeDebounceTimer.current);
+      }
+      collegeDebounceTimer.current = setTimeout(async () => {
+        try {
+          await saveCollegeData(userId, payload);
+          setSyncStatus('synced');
+        } catch {
+          setSyncStatus('error');
+        }
+      }, 600);
+    } else {
+      // Offline mode: immediate local save
+      saveCollegeData(undefined, payload);
+      setSyncStatus('offline');
+    }
 
-  // Save college data to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.COLLEGE_DATA, JSON.stringify(collegeData));
-  }, [collegeData]);
-
-  // Save ECA count to localStorage
-  useEffect(() => {
-    localStorage.setItem(STORAGE_KEYS.ECA_COUNT, ecaCount.toString());
-  }, [ecaCount]);
+    return () => {
+      if (collegeDebounceTimer.current) clearTimeout(collegeDebounceTimer.current);
+    };
+  }, [collegeData, ecaCount, userId]);
 
   // Helper to add new school week
   const addNewSchoolWeek = () => {
@@ -184,33 +277,45 @@ export default function App() {
       weekNumber: schoolWeeks.length + 1,
       startDate: new Date().toISOString(),
       attendance: {
-        monday: false,
-        tuesday: false,
-        wednesday: false,
-        thursday: false,
-        friday: false,
-        saturday: false,
+        monday: 'absent',
+        tuesday: 'absent',
+        wednesday: 'absent',
+        thursday: 'absent',
+        friday: 'absent',
+        saturday: 'absent',
       },
     };
     setSchoolWeeks([...schoolWeeks, newWeek]);
     setCurrentSchoolWeek(newWeek.weekNumber);
   };
 
-  // Helper to reset all data (for testing or user logout)
-  const resetAllData = () => {
-    Object.values(STORAGE_KEYS).forEach(key => {
-      localStorage.removeItem(key);
-    });
-    window.location.reload();
+  // Sign out handler
+  const handleSignOut = async () => {
+    if (isSupabaseConfigured() && userId) {
+      await supabase.auth.signOut();
+    }
+    setUserId(null);
+    setUserEmail(null);
+    setSyncStatus('offline');
   };
 
-  // Show loading state while data is being loaded
+  // Helper to reset all local data
+  const resetAllData = () => {
+    if (confirm('Are you sure you want to reset your local data?')) {
+      Object.values(STORAGE_KEYS).forEach(key => {
+        localStorage.removeItem(key);
+      });
+      window.location.reload();
+    }
+  };
+
+  // Loading Screen
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading...</p>
+          <div className="w-12 h-12 border-4 border-purple-500 border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 font-medium">Loading Attendify...</p>
         </div>
       </div>
     );
@@ -218,25 +323,107 @@ export default function App() {
 
   // Show onboarding if no user profile exists
   if (!user) {
-    return <OnboardingScreen onComplete={setUser} />;
+    return (
+      <>
+        <Toaster richColors position="top-center" closeButton />
+        <OnboardingScreen
+          onComplete={(profile, uid) => {
+            setUser(profile);
+            if (uid) {
+              setUserId(uid);
+              setSyncStatus('synced');
+            } else {
+              setSyncStatus('offline');
+            }
+          }}
+          onOpenAuth={() => {
+            setAuthModalTab('signin');
+            setIsAuthModalOpen(true);
+          }}
+        />
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          initialTab={authModalTab}
+          onAuthSuccess={(profile, uid) => {
+            setUser(profile);
+            setUserId(uid);
+            setSyncStatus('synced');
+          }}
+        />
+      </>
+    );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <Toaster richColors position="top-center" closeButton />
       <div className="max-w-md mx-auto min-h-screen flex flex-col pb-20">
         {/* Header */}
-        <div className="p-6 bg-white/80 backdrop-blur-sm border-b border-gray-100">
-          <h1 className="text-center text-gray-900">Attendify</h1>
-          <p className="text-center text-gray-600 mt-1">
-            {user.fullName} • {user.userType === 'school' ? `Class: ${user.classOrSemester}` : `Semester: ${user.classOrSemester}`}
-          </p>
-          {/* Optional: Add a logout/reset button for testing */}
-          <button
-            onClick={resetAllData}
-            className="text-xs text-gray-400 hover:text-gray-600 mx-auto block mt-2"
-          >
-            Reset Account
-          </button>
+        <div className="p-5 bg-white/85 backdrop-blur-md border-b border-gray-100/80 shadow-sm sticky top-0 z-30">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-xl font-bold text-gray-900 tracking-tight">Attendify</h1>
+              <p className="text-xs text-gray-600 mt-0.5">
+                {user.fullName} • {user.userType === 'school' ? `Class ${user.classOrSemester}` : `Semester ${user.classOrSemester}`}
+              </p>
+            </div>
+
+            {/* Cloud Sync Badge & Account Controls */}
+            <div className="flex items-center gap-2">
+              {userId ? (
+                <div className="flex items-center gap-1.5">
+                  <div
+                    title={syncStatus === 'synced' ? 'Cloud Synced' : syncStatus === 'syncing' ? 'Saving to Cloud...' : 'Sync Error'}
+                    className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${
+                      syncStatus === 'synced'
+                        ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/60'
+                        : syncStatus === 'syncing'
+                        ? 'bg-amber-50 text-amber-700 border border-amber-200/60'
+                        : 'bg-red-50 text-red-700 border border-red-200/60'
+                    }`}
+                  >
+                    {syncStatus === 'synced' && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />}
+                    {syncStatus === 'syncing' && <Loader2 className="w-3.5 h-3.5 text-amber-600 animate-spin" />}
+                    {syncStatus === 'error' && <AlertCircle className="w-3.5 h-3.5 text-red-600" />}
+                    <span>{syncStatus === 'synced' ? 'Synced' : syncStatus === 'syncing' ? 'Saving' : 'Offline'}</span>
+                  </div>
+
+                  <button
+                    onClick={handleSignOut}
+                    title={`Signed in as ${userEmail || user.fullName}. Click to sign out.`}
+                    className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    <LogOut className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => {
+                    setAuthModalTab('signup');
+                    setIsAuthModalOpen(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                >
+                  <Cloud className="w-3.5 h-3.5" />
+                  Sync to Cloud
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Quick link to reset for testing if needed */}
+          <div className="flex justify-between items-center mt-2 pt-2 border-t border-gray-50">
+            <span className="text-[11px] text-gray-400">
+              {userId ? (userEmail ? `Cloud Account: ${userEmail}` : 'Connected to Supabase') : 'Local Storage Mode'}
+            </span>
+            <button
+              onClick={resetAllData}
+              className="text-[11px] text-gray-400 hover:text-red-600 transition-colors"
+            >
+              Reset Data
+            </button>
+          </div>
         </div>
 
         {/* Main Content */}
@@ -293,11 +480,23 @@ export default function App() {
           )}
         </div>
 
-        {/* Navigation */}
+        {/* Bottom Navigation */}
         <Navigation
           activeTab={activeTab}
           onTabChange={setActiveTab}
           userType={user.userType}
+        />
+
+        {/* Auth Modal */}
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          initialTab={authModalTab}
+          onAuthSuccess={(profile, uid) => {
+            setUser(profile);
+            setUserId(uid);
+            setSyncStatus('synced');
+          }}
         />
       </div>
     </div>
