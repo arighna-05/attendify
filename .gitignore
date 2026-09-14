@@ -1,0 +1,23 @@
+# Dependencies
+node_modules
+node_modules/.vite
+
+# Production build output
+dist
+
+# Environment and local configurations
+.env
+.env.local
+.env.*.local
+*.local
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Editor directories
+.vscode
+.idea
+
+# Vercel deployment cache
+.vercel

@@ -4,8 +4,9 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from './ui/dialog';
-import { TrendingUp, Plus, CheckCircle2, XCircle, BookOpen, Target, AlertTriangle } from 'lucide-react';
+import { TrendingUp, Plus, CheckCircle2, XCircle, BookOpen, Target, AlertTriangle, Edit } from 'lucide-react';
 import { CollegeData, CollegeSubject } from '../App';
+import { EditSubjectDialog } from './EditSubjectDialog';
 
 interface CollegeDashboardProps {
   data: CollegeData;
@@ -15,6 +16,7 @@ interface CollegeDashboardProps {
 
 export function CollegeDashboard({ data, onDataChange, ecaCount }: CollegeDashboardProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingSubject, setEditingSubject] = useState<CollegeSubject | null>(null);
   const [subjectName, setSubjectName] = useState('');
   const [inputTotalClasses, setInputTotalClasses] = useState('');
   const [inputAttendedClasses, setInputAttendedClasses] = useState('');
@@ -67,30 +69,13 @@ export function CollegeDashboard({ data, onDataChange, ecaCount }: CollegeDashbo
     });
     onDataChange({ ...data, subjects: updatedSubjects });
   };
-  // ✏️ Edit Subject function
-const editSubject = (subjectId: string) => {
-  const subject = data.subjects.find((s) => s.id === subjectId);
-  if (!subject) return;
-
-  const newTotal = parseInt(
-    prompt("Enter new total classes:", subject.totalClasses.toString()) || "",
-    10
-  );
-  const newAttended = parseInt(
-    prompt("Enter new attended classes:", subject.attendedClasses.toString()) || "",
-    10
-  );
-
-  if (!isNaN(newTotal) && !isNaN(newAttended)) {
+  // Save updated subject
+  const handleSaveSubject = (updatedSubject: CollegeSubject) => {
     const updatedSubjects = data.subjects.map((s) =>
-      s.id === subjectId
-        ? { ...s, totalClasses: newTotal, attendedClasses: newAttended }
-        : s
+      s.id === updatedSubject.id ? updatedSubject : s
     );
-
     onDataChange({ ...data, subjects: updatedSubjects });
-  }
-};
+  };
 
   // Calculate overall stats
   const totalClasses = data.subjects.reduce((sum, subject) => sum + subject.totalClasses, 0);
@@ -333,11 +318,12 @@ const editSubject = (subjectId: string) => {
                       </div>
                       <div className="pt-2">
                         <Button
-                        variant="secondary"
-                        className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-md"
-                        onClick={() => editSubject(subject.id)}
+                          variant="secondary"
+                          className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white hover:from-blue-600 hover:to-purple-600 shadow-md flex items-center justify-center gap-2"
+                          onClick={() => setEditingSubject(subject)}
                         >
-                          ✏️ Edit Subject
+                          <Edit className="w-4 h-4" />
+                          Edit Subject
                         </Button>
                       </div>
                     </div>
@@ -348,6 +334,14 @@ const editSubject = (subjectId: string) => {
           </div>
         )}
       </div>
+
+      {/* Edit Subject Dialog */}
+      <EditSubjectDialog
+        subject={editingSubject}
+        open={!!editingSubject}
+        onOpenChange={(open) => !open && setEditingSubject(null)}
+        onSave={handleSaveSubject}
+      />
     </div>
   );
 }

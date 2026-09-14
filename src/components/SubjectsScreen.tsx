@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
 import { BookOpen, Edit, Trash2, Calendar } from 'lucide-react';
-import { CollegeData } from '../App';
+import { CollegeData, CollegeSubject } from '../App';
+import { EditSubjectDialog } from './EditSubjectDialog';
 
 interface SubjectsScreenProps {
   data: CollegeData;
@@ -9,10 +11,19 @@ interface SubjectsScreenProps {
 }
 
 export function SubjectsScreen({ data, onDataChange }: SubjectsScreenProps) {
+  const [editingSubject, setEditingSubject] = useState<CollegeSubject | null>(null);
+
   const deleteSubject = (id: string) => {
     onDataChange({
       ...data,
       subjects: data.subjects.filter((s) => s.id !== id),
+    });
+  };
+
+  const handleSaveSubject = (updatedSubject: CollegeSubject) => {
+    onDataChange({
+      ...data,
+      subjects: data.subjects.map((s) => (s.id === updatedSubject.id ? updatedSubject : s)),
     });
   };
 
@@ -102,8 +113,18 @@ export function SubjectsScreen({ data, onDataChange }: SubjectsScreenProps) {
                     <Button
                       size="sm"
                       variant="ghost"
+                      onClick={() => setEditingSubject(subject)}
+                      className="text-blue-500 hover:text-blue-600 hover:bg-blue-50"
+                      title="Edit Subject"
+                    >
+                      <Edit className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
                       onClick={() => deleteSubject(subject.id)}
                       className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                      title="Delete Subject"
                     >
                       <Trash2 className="w-4 h-4" />
                     </Button>
@@ -147,6 +168,14 @@ export function SubjectsScreen({ data, onDataChange }: SubjectsScreenProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Edit Subject Dialog */}
+      <EditSubjectDialog
+        subject={editingSubject}
+        open={!!editingSubject}
+        onOpenChange={(open) => !open && setEditingSubject(null)}
+        onSave={handleSaveSubject}
+      />
     </div>
   );
 }

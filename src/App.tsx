@@ -52,17 +52,32 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<'home' | 'subjects' | 'eca' | 'stats'>('home');
   
   // School data - multiple weeks + mid-session join
+  type DayStatus = "present" | "absent" | "holiday";
+
+  interface Week {
+    weekNumber: number;
+    startDate: string;
+    attendance: {
+      monday: DayStatus;
+      tuesday: DayStatus;
+      wednesday: DayStatus;
+      thursday: DayStatus;
+      friday: DayStatus;
+      saturday: DayStatus;
+    };
+  }
+  const [saturdayEnabled, setSaturdayEnabled] = useState(true);
   const [schoolWeeks, setSchoolWeeks] = useState<Week[]>([
     {
       weekNumber: 1,
       startDate: new Date().toISOString(),
       attendance: {
-        monday: false,
-        tuesday: false,
-        wednesday: false,
-        thursday: false,
-        friday: false,
-        saturday: false,
+        monday: "absent",
+        tuesday: "absent",
+        wednesday: "absent",
+        thursday: "absent",
+        friday: "absent",
+        saturday: "absent",
       },
     },
   ]);
@@ -237,6 +252,8 @@ export default function App() {
               previousTotal={previousTotal}
               onPreviousAttendedChange={setPreviousAttended}
               onPreviousTotalChange={setPreviousTotal}
+              saturdayEnabled={saturdayEnabled}
+              onSaturdayEnabledChange={setSaturdayEnabled}
             />
           )}
           
