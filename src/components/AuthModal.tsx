@@ -3,9 +3,6 @@ import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { saveUserProfile, fetchUserProfile, migrateLocalDataToCloud } from '../services/dataService';
 import { UserProfile } from '../App';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from './ui/dialog';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
 import {
   Cloud,
   Lock,
@@ -17,11 +14,13 @@ import {
   EyeOff,
   School,
   GraduationCap,
-  CheckCircle2,
+  Check,
   Loader2,
   ShieldCheck,
+  ArrowRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import '../styles/auth.css';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -45,16 +44,16 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab = 'signup
 
   // Password strength calculation
   const getPasswordStrength = (pass: string) => {
-    if (!pass) return { score: 0, label: '', color: 'bg-gray-200' };
-    if (pass.length < 6) return { score: 1, label: 'Too short', color: 'bg-red-400' };
+    if (!pass) return { score: 0, label: '', style: '' };
+    if (pass.length < 6) return { score: 1, label: 'Too short', style: 'weak' };
     let score = 1;
     if (pass.length >= 8) score++;
     if (/[0-9]/.test(pass)) score++;
     if (/[^A-Za-z0-9]/.test(pass)) score++;
     
-    if (score === 2) return { score: 2, label: 'Fair', color: 'bg-amber-400' };
-    if (score === 3) return { score: 3, label: 'Good', color: 'bg-blue-400' };
-    return { score: 4, label: 'Strong', color: 'bg-emerald-500' };
+    if (score === 2) return { score: 2, label: 'Fair', style: 'fair' };
+    if (score === 3) return { score: 3, label: 'Good', style: 'good' };
+    return { score: 4, label: 'Strong', style: 'strong' };
   };
 
   const passwordStrength = getPasswordStrength(password);
@@ -107,7 +106,6 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab = 'signup
           await saveUserProfile(data.user.id, profile);
         }
 
-        // Migrate local data to cloud
         await migrateLocalDataToCloud(data.user.id);
 
         toast.success(`Signed in! All attendance data synced to cloud.`);
@@ -184,43 +182,39 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab = 'signup
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-md bg-white/95 backdrop-blur-md border border-gray-100 shadow-2xl rounded-2xl p-6">
-        <DialogHeader className="text-center pb-1">
-          <div className="w-12 h-12 bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-2 text-white shadow-lg shadow-indigo-500/25">
-            <Cloud className="w-6 h-6" />
+      <DialogContent className="auth-modal-content" style={{ maxWidth: '440px' }}>
+        <DialogHeader style={{ textAlign: 'center', alignItems: 'center' }} className="text-center sm:text-center pb-2">
+          <div className="auth-brand-logo mx-auto mb-2" style={{ width: 50, height: 50, borderRadius: 15 }}>
+            <Cloud className="w-6 h-6 text-white" />
           </div>
-          <DialogTitle className="text-xl font-bold text-gray-900">
+          <DialogTitle className="text-xl font-bold text-slate-900 text-center">
             {tab === 'signin' ? 'Sign In to Attendify' : 'Enable Cloud Backup & Sync'}
           </DialogTitle>
-          <DialogDescription className="text-gray-500 text-xs">
-            Never lose your attendance records and access them anywhere.
+          <DialogDescription className="text-slate-500 text-xs mt-1 text-center">
+            Never lose your attendance records and access them on any device.
           </DialogDescription>
         </DialogHeader>
 
         {/* Tab switch */}
-        <div className="grid grid-cols-2 p-1 bg-gray-100 rounded-xl my-2">
+        <div className="auth-tabs my-2">
           <button
             type="button"
             onClick={() => { setTab('signup'); setErrorMessage(null); }}
-            className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
-              tab === 'signup' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'
-            }`}
+            className={`auth-tab-btn ${tab === 'signup' ? 'active' : ''}`}
           >
             Create Account
           </button>
           <button
             type="button"
             onClick={() => { setTab('signin'); setErrorMessage(null); }}
-            className={`py-1.5 text-xs font-semibold rounded-lg transition-all ${
-              tab === 'signin' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-800'
-            }`}
+            className={`auth-tab-btn ${tab === 'signin' ? 'active' : ''}`}
           >
             Sign In
           </button>
         </div>
 
         {errorMessage && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-700 text-xs flex items-center gap-2 animate-in fade-in duration-200">
+          <div className="auth-error-box mb-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             <span>{errorMessage}</span>
           </div>
@@ -228,197 +222,229 @@ export function AuthModal({ isOpen, onClose, onAuthSuccess, initialTab = 'signup
 
         {/* SIGN UP */}
         {tab === 'signup' && (
-          <form onSubmit={handleSignUp} className="space-y-3">
+          <form onSubmit={handleSignUp} className="auth-form">
             {/* Student Role Cards */}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
+            <div className="auth-roles-grid">
+              <div
+                className={`auth-role-card ${userType === 'school' ? 'active' : ''}`}
                 onClick={() => setUserType('school')}
-                className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all ${
-                  userType === 'school' ? 'border-indigo-600 bg-indigo-50/50 font-semibold' : 'border-gray-200'
-                }`}
+                style={{ padding: '10px 12px' }}
               >
-                <School className="w-4 h-4 text-indigo-600" />
-                <span className="text-xs">School</span>
-              </button>
+                <div className="auth-role-top">
+                  <div className="auth-role-icon" style={{ width: 28, height: 28 }}>
+                    <School className="w-3.5 h-3.5" />
+                  </div>
+                  {userType === 'school' && (
+                    <div className="auth-role-badge" style={{ width: 16, height: 16 }}>
+                      <Check className="w-2.5 h-2.5" />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div className="auth-role-name" style={{ fontSize: '12px' }}>School</div>
+                  <div className="auth-role-desc" style={{ fontSize: '10px' }}>Weekly routines</div>
+                </div>
+              </div>
 
-              <button
-                type="button"
+              <div
+                className={`auth-role-card ${userType === 'college' ? 'active' : ''}`}
                 onClick={() => setUserType('college')}
-                className={`p-2 rounded-xl border text-left flex items-center gap-2 transition-all ${
-                  userType === 'college' ? 'border-indigo-600 bg-indigo-50/50 font-semibold' : 'border-gray-200'
-                }`}
+                style={{ padding: '10px 12px' }}
               >
-                <GraduationCap className="w-4 h-4 text-indigo-600" />
-                <span className="text-xs">College</span>
-              </button>
+                <div className="auth-role-top">
+                  <div className="auth-role-icon" style={{ width: 28, height: 28 }}>
+                    <GraduationCap className="w-3.5 h-3.5" />
+                  </div>
+                  {userType === 'college' && (
+                    <div className="auth-role-badge" style={{ width: 16, height: 16 }}>
+                      <Check className="w-2.5 h-2.5" />
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <div className="auth-role-name" style={{ fontSize: '12px' }}>College</div>
+                  <div className="auth-role-desc" style={{ fontSize: '10px' }}>Subjects & ECA %</div>
+                </div>
+              </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <Label className="text-xs text-gray-600">Full Name</Label>
-                <div className="relative">
-                  <User className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
-                  <Input
+            <div className="auth-form-row">
+              <div className="auth-field-group">
+                <label className="auth-label">Full Name</label>
+                <div className="auth-input-container">
+                  <span className="auth-input-icon">
+                    <User className="w-4 h-4" />
+                  </span>
+                  <input
                     placeholder="Your Name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="pl-8 h-9 text-xs rounded-lg"
+                    className="auth-input"
                     required
                   />
                 </div>
               </div>
 
-              <div className="space-y-1">
-                <Label className="text-xs text-gray-600">
+              <div className="auth-field-group">
+                <label className="auth-label">
                   {userType === 'school' ? 'Class' : 'Semester'}
-                </Label>
-                <div className="relative">
-                  <BookOpen className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
-                  <Input
+                </label>
+                <div className="auth-input-container">
+                  <span className="auth-input-icon">
+                    <BookOpen className="w-4 h-4" />
+                  </span>
+                  <input
                     placeholder={userType === 'school' ? 'e.g. 10th' : 'e.g. 4th Sem'}
                     value={classOrSemester}
                     onChange={(e) => setClassOrSemester(e.target.value)}
-                    className="pl-8 h-9 text-xs rounded-lg"
+                    className="auth-input"
                     required
                   />
                 </div>
               </div>
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs text-gray-600">Email Address</Label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
-                <Input
+            <div className="auth-field-group">
+              <label className="auth-label">Email Address</label>
+              <div className="auth-input-container">
+                <span className="auth-input-icon">
+                  <Mail className="w-4 h-4" />
+                </span>
+                <input
                   type="email"
                   placeholder="student@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-8 h-9 text-xs rounded-lg"
+                  className="auth-input"
                   required
                 />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <div className="flex justify-between items-center">
-                <Label className="text-xs text-gray-600">Password</Label>
+            <div className="auth-field-group">
+              <div className="auth-label">
+                <span>Password</span>
                 {password && (
-                  <span className="text-[10px] text-gray-400">
-                    Strength: <strong className="text-gray-700">{passwordStrength.label}</strong>
+                  <span className="auth-strength-text">
+                    Strength: <strong style={{ color: '#0f172a' }}>{passwordStrength.label}</strong>
                   </span>
                 )}
               </div>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
-                <Input
+              <div className="auth-input-container">
+                <span className="auth-input-icon">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Min 6 characters"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-8 pr-8 h-9 text-xs rounded-lg"
+                  className="auth-input has-toggle"
                   minLength={6}
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600"
+                  className="auth-input-toggle"
+                  title={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
               </div>
 
               {password.length > 0 && (
-                <div className="flex items-center gap-1 mt-1">
-                  <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden flex gap-0.5">
-                    <div className={`h-full flex-1 ${passwordStrength.score >= 1 ? passwordStrength.color : 'bg-gray-200'}`} />
-                    <div className={`h-full flex-1 ${passwordStrength.score >= 2 ? passwordStrength.color : 'bg-gray-200'}`} />
-                    <div className={`h-full flex-1 ${passwordStrength.score >= 3 ? passwordStrength.color : 'bg-gray-200'}`} />
-                    <div className={`h-full flex-1 ${passwordStrength.score >= 4 ? passwordStrength.color : 'bg-gray-200'}`} />
-                  </div>
+                <div className="auth-strength-meter">
+                  <div className={`auth-strength-segment ${passwordStrength.score >= 1 ? passwordStrength.style : ''}`} />
+                  <div className={`auth-strength-segment ${passwordStrength.score >= 2 ? passwordStrength.style : ''}`} />
+                  <div className={`auth-strength-segment ${passwordStrength.score >= 3 ? passwordStrength.style : ''}`} />
+                  <div className={`auth-strength-segment ${passwordStrength.score >= 4 ? passwordStrength.style : ''}`} />
                 </div>
               )}
             </div>
 
-            <Button
+            <button
               type="submit"
               disabled={loading || !fullName.trim() || !classOrSemester.trim() || !email.trim() || password.length < 6}
-              className="w-full h-10 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl mt-2"
+              className="auth-submit-btn"
             >
               {loading ? (
-                <span className="inline-flex items-center gap-2">
+                <>
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Creating Account...
-                </span>
+                </>
               ) : (
-                <span className="inline-flex items-center gap-2">
+                <>
                   <ShieldCheck className="w-4 h-4" />
                   Create Account & Sync Data
-                </span>
+                </>
               )}
-            </Button>
+            </button>
           </form>
         )}
 
         {/* SIGN IN */}
         {tab === 'signin' && (
-          <form onSubmit={handleSignIn} className="space-y-3">
-            <div className="space-y-1">
-              <Label className="text-xs text-gray-600">Email Address</Label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
-                <Input
+          <form onSubmit={handleSignIn} className="auth-form">
+            <div className="auth-field-group">
+              <label className="auth-label">Email Address</label>
+              <div className="auth-input-container">
+                <span className="auth-input-icon">
+                  <Mail className="w-4 h-4" />
+                </span>
+                <input
                   type="email"
                   placeholder="student@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="pl-8 h-9 text-xs rounded-lg"
+                  className="auth-input"
                   required
                 />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <Label className="text-xs text-gray-600">Password</Label>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-gray-400 absolute left-2.5 top-2.5" />
-                <Input
+            <div className="auth-field-group">
+              <label className="auth-label">Password</label>
+              <div className="auth-input-container">
+                <span className="auth-input-icon">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
                   type={showPassword ? 'text' : 'password'}
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-8 pr-8 h-9 text-xs rounded-lg"
+                  className="auth-input has-toggle"
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-2.5 top-2.5 text-gray-400 hover:text-gray-600"
+                  className="auth-input-toggle"
+                  title={showPassword ? 'Hide password' : 'Show password'}
                 >
                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
               </div>
             </div>
 
-            <Button
+            <button
               type="submit"
               disabled={loading || !email.trim() || !password}
-              className="w-full h-10 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl mt-2"
+              className="auth-submit-btn"
             >
               {loading ? (
-                <span className="inline-flex items-center gap-2">
+                <>
                   <Loader2 className="w-4 h-4 animate-spin" />
                   Signing In...
-                </span>
+                </>
               ) : (
-                <span className="inline-flex items-center gap-2">
+                <>
                   <Cloud className="w-4 h-4" />
                   Sign In & Sync
-                </span>
+                </>
               )}
-            </Button>
+            </button>
           </form>
         )}
       </DialogContent>

@@ -1,8 +1,4 @@
 import { useState } from 'react';
-import { Button } from './ui/button';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Card, CardContent } from './ui/card';
 import { UserProfile } from '../App';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { saveUserProfile, fetchUserProfile, migrateLocalDataToCloud } from '../services/dataService';
@@ -17,13 +13,14 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
-  CheckCircle2,
+  Check,
   AlertCircle,
   Loader2,
   ShieldCheck,
   Cloud,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import '../styles/auth.css';
 
 interface OnboardingScreenProps {
   onComplete: (user: UserProfile, userId?: string) => void;
@@ -45,39 +42,38 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
 
   // Password strength calculation
   const getPasswordStrength = (pass: string) => {
-    if (!pass) return { score: 0, label: '', color: 'bg-gray-200' };
-    if (pass.length < 6) return { score: 1, label: 'Too short', color: 'bg-red-400' };
+    if (!pass) return { score: 0, label: '', style: '' };
+    if (pass.length < 6) return { score: 1, label: 'Too short', style: 'weak' };
     let score = 1;
     if (pass.length >= 8) score++;
     if (/[0-9]/.test(pass)) score++;
     if (/[^A-Za-z0-9]/.test(pass)) score++;
     
-    if (score === 2) return { score: 2, label: 'Fair', color: 'bg-amber-400' };
-    if (score === 3) return { score: 3, label: 'Good', color: 'bg-blue-400' };
-    return { score: 4, label: 'Strong', color: 'bg-emerald-500' };
+    if (score === 2) return { score: 2, label: 'Fair', style: 'fair' };
+    if (score === 3) return { score: 3, label: 'Good', style: 'good' };
+    return { score: 4, label: 'Strong', style: 'strong' };
   };
 
   const passwordStrength = getPasswordStrength(password);
 
-  // Friendly error formatter
   const formatAuthError = (err: any): string => {
     const msg = err?.message || String(err);
     if (msg.includes('User already registered')) {
-      return 'An account with this email already exists. Please switch to Sign In.';
+      return 'An account with this email already exists. Switch to Sign In.';
     }
     if (msg.includes('Invalid login credentials')) {
       return 'Incorrect email or password. Please try again.';
     }
     if (msg.includes('Email not confirmed')) {
-      return 'Please check your email to verify your account before signing in.';
+      return 'Please check your email to verify your account.';
     }
     if (msg.includes('Password should be at least')) {
       return 'Password must be at least 6 characters long.';
     }
-    return msg || 'An error occurred during authentication.';
+    return msg || 'Authentication error occurred.';
   };
 
-  // Handle Sign Up
+  // Sign Up Handler
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -93,7 +89,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     }
 
     if (!isConfigured) {
-      toast.error('Supabase credentials not detected. Continuing in offline mode.');
+      toast.error('Supabase credentials not configured. Continuing in offline mode.');
       handleGuestContinue();
       return;
     }
@@ -140,13 +136,13 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     }
   };
 
-  // Handle Sign In
+  // Sign In Handler
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
     if (!email.trim() || !password) {
-      setErrorMessage('Please enter both email and password.');
+      setErrorMessage('Please enter your email and password.');
       return;
     }
 
@@ -180,7 +176,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
         await migrateLocalDataToCloud(data.user.id);
 
         toast.success(`Welcome back, ${profile.fullName}!`, {
-          icon: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
+          icon: <Check className="w-4 h-4 text-emerald-500" />,
         });
 
         onComplete(profile, data.user.id);
@@ -194,7 +190,7 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
     }
   };
 
-  // Handle Guest / Offline Mode
+  // Guest / Offline Mode Handler
   const handleGuestContinue = () => {
     if (!fullName.trim() || !classOrSemester.trim()) {
       setErrorMessage('Please provide your name and class/semester for guest mode.');
@@ -213,403 +209,427 @@ export function OnboardingScreen({ onComplete }: OnboardingScreenProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50/70 via-white to-purple-50/70 flex items-center justify-center p-4 sm:p-6">
-      <div className="w-full max-w-md">
+    <div className="auth-page-wrapper">
+      <div className="auth-card">
         {/* Brand Header */}
-        <div className="text-center mb-6">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 via-indigo-600 to-purple-600 mb-3 shadow-xl shadow-indigo-500/25 ring-4 ring-white">
-            <GraduationCap className="w-9 h-9 text-white" />
+        <div className="auth-brand">
+          <div className="auth-brand-logo">
+            <GraduationCap className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 tracking-tight flex items-center justify-center gap-1.5">
+          <h1 className="auth-title">
             Attendify
-            <Sparkles className="w-5 h-5 text-amber-500 animate-pulse" />
+            <Sparkles className="w-5 h-5 text-amber-500" />
           </h1>
-          <p className="text-sm text-gray-500 mt-1">Smart, hassle-free attendance tracking for students</p>
+          <p className="auth-subtitle">Smart attendance tracking for students</p>
         </div>
 
-        {/* Main Card */}
-        <Card className="border border-gray-100 shadow-xl shadow-gray-200/50 bg-white/95 backdrop-blur-md rounded-2xl overflow-hidden">
-          {/* Mode Switcher Tabs */}
-          <div className="grid grid-cols-2 p-1.5 m-3 bg-gray-100/80 rounded-xl">
+        {/* Tab Switcher */}
+        {mode !== 'guest' && (
+          <div className="auth-tabs">
             <button
               type="button"
               onClick={() => { setMode('signup'); setErrorMessage(null); }}
-              className={`py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all ${
-                mode === 'signup'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-800'
-              }`}
+              className={`auth-tab-btn ${mode === 'signup' ? 'active' : ''}`}
             >
               Create Account
             </button>
             <button
               type="button"
               onClick={() => { setMode('signin'); setErrorMessage(null); }}
-              className={`py-2 text-xs sm:text-sm font-semibold rounded-lg transition-all ${
-                mode === 'signin'
-                  ? 'bg-white text-gray-900 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-800'
-              }`}
+              className={`auth-tab-btn ${mode === 'signin' ? 'active' : ''}`}
             >
               Sign In
             </button>
           </div>
+        )}
 
-          <CardContent className="p-5 sm:p-6 pt-2">
-            {/* Error Message Box */}
-            {errorMessage && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200/80 rounded-xl text-red-700 text-xs flex items-start gap-2 animate-in fade-in duration-200">
-                <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-                <span className="leading-relaxed">{errorMessage}</span>
-              </div>
-            )}
+        {/* Error Notification */}
+        {errorMessage && (
+          <div className="auth-error-box" style={{ marginBottom: '16px' }}>
+            <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
 
-            {/* SIGN UP FORM */}
-            {mode === 'signup' && (
-              <form onSubmit={handleSignUp} className="space-y-4">
-                {/* Visual Student Role Selection */}
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    I am tracking for
-                  </Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setUserType('school')}
-                      className={`relative p-3 rounded-xl border-2 text-left transition-all flex flex-col items-start gap-1.5 ${
-                        userType === 'school'
-                          ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-1 ring-indigo-600'
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
-                    >
-                      <div className={`p-1.5 rounded-lg ${userType === 'school' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                        <School className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-gray-900">School</div>
-                        <div className="text-[10px] text-gray-500 leading-tight">Weekly schedules</div>
-                      </div>
-                      {userType === 'school' && (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 absolute top-2.5 right-2.5" />
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setUserType('college')}
-                      className={`relative p-3 rounded-xl border-2 text-left transition-all flex flex-col items-start gap-1.5 ${
-                        userType === 'college'
-                          ? 'border-indigo-600 bg-indigo-50/50 shadow-sm ring-1 ring-indigo-600'
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
-                    >
-                      <div className={`p-1.5 rounded-lg ${userType === 'college' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600'}`}>
-                        <GraduationCap className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="text-xs font-bold text-gray-900">College</div>
-                        <div className="text-[10px] text-gray-500 leading-tight">Subjects & ECA %</div>
-                      </div>
-                      {userType === 'college' && (
-                        <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600 absolute top-2.5 right-2.5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Name & Academic Class */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label htmlFor="signup-name" className="text-xs font-medium text-gray-700">
-                      Full Name
-                    </Label>
-                    <div className="relative">
-                      <User className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                      <Input
-                        id="signup-name"
-                        placeholder="e.g. Alex Smith"
-                        value={fullName}
-                        onChange={(e) => setFullName(e.target.value)}
-                        className="pl-9 h-10 text-xs rounded-xl"
-                        required
-                      />
+        {/* CREATE ACCOUNT FORM */}
+        {mode === 'signup' && (
+          <form onSubmit={handleSignUp} className="auth-form">
+            {/* Student Role Cards */}
+            <div className="auth-field-group">
+              <label className="auth-label">I AM TRACKING FOR</label>
+              <div className="auth-roles-grid">
+                {/* School Card */}
+                <div
+                  className={`auth-role-card ${userType === 'school' ? 'active' : ''}`}
+                  onClick={() => setUserType('school')}
+                >
+                  <div className="auth-role-top">
+                    <div className="auth-role-icon">
+                      <School className="w-4 h-4" />
                     </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="signup-class" className="text-xs font-medium text-gray-700">
-                      {userType === 'school' ? 'Class' : 'Semester'}
-                    </Label>
-                    <div className="relative">
-                      <BookOpen className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                      <Input
-                        id="signup-class"
-                        placeholder={userType === 'school' ? 'e.g. 10th' : 'e.g. 4th Sem'}
-                        value={classOrSemester}
-                        onChange={(e) => setClassOrSemester(e.target.value)}
-                        className="pl-9 h-10 text-xs rounded-xl"
-                        required
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Email Field */}
-                <div className="space-y-1">
-                  <Label htmlFor="signup-email" className="text-xs font-medium text-gray-700">
-                    Email Address
-                  </Label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                    <Input
-                      id="signup-email"
-                      type="email"
-                      placeholder="alex@university.edu"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-9 h-10 text-xs rounded-xl"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Password Field */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="signup-password" className="text-xs font-medium text-gray-700">
-                      Password
-                    </Label>
-                    {password && (
-                      <span className="text-[10px] text-gray-400">
-                        Strength: <strong className="text-gray-700">{passwordStrength.label}</strong>
-                      </span>
+                    {userType === 'school' && (
+                      <div className="auth-role-badge">
+                        <Check className="w-3 h-3" />
+                      </div>
                     )}
                   </div>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                    <Input
-                      id="signup-password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="Min 6 characters"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-9 pr-9 h-10 text-xs rounded-xl"
-                      minLength={6}
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                  <div>
+                    <div className="auth-role-name">School</div>
+                    <div className="auth-role-desc">Weekly routines</div>
                   </div>
+                </div>
 
-                  {/* Password Strength Progress Bar */}
-                  {password.length > 0 && (
-                    <div className="flex items-center gap-1.5 mt-1.5">
-                      <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden flex gap-0.5">
-                        <div className={`h-full flex-1 ${passwordStrength.score >= 1 ? passwordStrength.color : 'bg-gray-200'}`} />
-                        <div className={`h-full flex-1 ${passwordStrength.score >= 2 ? passwordStrength.color : 'bg-gray-200'}`} />
-                        <div className={`h-full flex-1 ${passwordStrength.score >= 3 ? passwordStrength.color : 'bg-gray-200'}`} />
-                        <div className={`h-full flex-1 ${passwordStrength.score >= 4 ? passwordStrength.color : 'bg-gray-200'}`} />
-                      </div>
+                {/* College Card */}
+                <div
+                  className={`auth-role-card ${userType === 'college' ? 'active' : ''}`}
+                  onClick={() => setUserType('college')}
+                >
+                  <div className="auth-role-top">
+                    <div className="auth-role-icon">
+                      <GraduationCap className="w-4 h-4" />
                     </div>
-                  )}
-                </div>
-
-                {/* Submit Button */}
-                <Button
-                  type="submit"
-                  disabled={isLoading || !fullName.trim() || !classOrSemester.trim() || !email.trim() || password.length < 6}
-                  className="w-full h-11 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-md shadow-indigo-500/25 transition-all mt-2"
-                >
-                  {isLoading ? (
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Creating Account...
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-2">
-                      <ShieldCheck className="w-4 h-4" />
-                      Create Account & Start Tracking
-                      <ArrowRight className="w-4 h-4" />
-                    </span>
-                  )}
-                </Button>
-
-                {/* Offline Option */}
-                <div className="text-center pt-2">
-                  <button
-                    type="button"
-                    onClick={() => { setMode('guest'); setErrorMessage(null); }}
-                    className="text-xs text-gray-400 hover:text-gray-700 transition-colors"
-                  >
-                    Want to try first without an email? <span className="font-semibold text-indigo-600">Continue as Guest</span>
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* SIGN IN FORM */}
-            {mode === 'signin' && (
-              <form onSubmit={handleSignIn} className="space-y-4">
-                <div className="space-y-1">
-                  <Label htmlFor="signin-email" className="text-xs font-medium text-gray-700">
-                    Email Address
-                  </Label>
-                  <div className="relative">
-                    <Mail className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                    <Input
-                      id="signin-email"
-                      type="email"
-                      placeholder="student@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-9 h-10 text-xs rounded-xl"
-                      required
-                    />
+                    {userType === 'college' && (
+                      <div className="auth-role-badge">
+                        <Check className="w-3 h-3" />
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="auth-role-name">College</div>
+                    <div className="auth-role-desc">Subjects & ECA %</div>
                   </div>
                 </div>
+              </div>
+            </div>
 
-                <div className="space-y-1">
-                  <Label htmlFor="signin-password" className="text-xs font-medium text-gray-700">
-                    Password
-                  </Label>
-                  <div className="relative">
-                    <Lock className="w-4 h-4 text-gray-400 absolute left-3 top-2.5" />
-                    <Input
-                      id="signin-password"
-                      type={showPassword ? 'text' : 'password'}
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pl-9 pr-9 h-10 text-xs rounded-xl"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                <Button
-                  type="submit"
-                  disabled={isLoading || !email.trim() || !password}
-                  className="w-full h-11 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold rounded-xl shadow-md shadow-indigo-500/25 transition-all mt-2"
-                >
-                  {isLoading ? (
-                    <span className="inline-flex items-center gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Signing In...
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-2">
-                      <Cloud className="w-4 h-4" />
-                      Sign In & Restore Attendance
-                      <ArrowRight className="w-4 h-4" />
-                    </span>
-                  )}
-                </Button>
-
-                <div className="text-center pt-2">
-                  <button
-                    type="button"
-                    onClick={() => { setMode('signup'); setErrorMessage(null); }}
-                    className="text-xs text-gray-500 hover:text-gray-800 transition-colors"
-                  >
-                    Don't have an account? <span className="font-semibold text-indigo-600">Create one for free</span>
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* GUEST MODE FORM */}
-            {mode === 'guest' && (
-              <div className="space-y-4 animate-in fade-in duration-200">
-                <div className="p-3 bg-amber-50/80 border border-amber-200/80 rounded-xl text-amber-800 text-xs leading-relaxed">
-                  <strong>Offline / Guest Mode:</strong> Your data is stored on this device. You can upgrade to a cloud account anytime from the header to prevent data loss.
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="guest-name" className="text-xs font-medium text-gray-700">
-                    Your Name
-                  </Label>
-                  <Input
-                    id="guest-name"
-                    placeholder="Enter your name"
+            {/* Name and Class/Semester */}
+            <div className="auth-form-row">
+              <div className="auth-field-group">
+                <label htmlFor="signup-name" className="auth-label">Full Name</label>
+                <div className="auth-input-container">
+                  <span className="auth-input-icon">
+                    <User className="w-4 h-4" />
+                  </span>
+                  <input
+                    id="signup-name"
+                    type="text"
+                    placeholder="e.g. Alex Smith"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="h-10 text-xs rounded-xl"
+                    className="auth-input"
+                    required
                   />
                 </div>
+              </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label className="text-xs font-medium text-gray-700">Student Type</Label>
-                    <div className="grid grid-cols-2 gap-1 bg-gray-100 p-1 rounded-xl">
-                      <button
-                        type="button"
-                        onClick={() => setUserType('school')}
-                        className={`py-1.5 text-xs font-medium rounded-lg transition-all ${userType === 'school' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
-                      >
-                        School
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setUserType('college')}
-                        className={`py-1.5 text-xs font-medium rounded-lg transition-all ${userType === 'college' ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500'}`}
-                      >
-                        College
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <Label htmlFor="guest-class" className="text-xs font-medium text-gray-700">
-                      {userType === 'school' ? 'Class' : 'Semester'}
-                    </Label>
-                    <Input
-                      id="guest-class"
-                      placeholder={userType === 'school' ? 'e.g. 10th' : 'e.g. 3rd Sem'}
-                      value={classOrSemester}
-                      onChange={(e) => setClassOrSemester(e.target.value)}
-                      className="h-10 text-xs rounded-xl"
-                    />
-                  </div>
+              <div className="auth-field-group">
+                <label htmlFor="signup-class" className="auth-label">
+                  {userType === 'school' ? 'Class' : 'Semester'}
+                </label>
+                <div className="auth-input-container">
+                  <span className="auth-input-icon">
+                    <BookOpen className="w-4 h-4" />
+                  </span>
+                  <input
+                    id="signup-class"
+                    type="text"
+                    placeholder={userType === 'school' ? 'e.g. 10th' : 'e.g. 4th Sem'}
+                    value={classOrSemester}
+                    onChange={(e) => setClassOrSemester(e.target.value)}
+                    className="auth-input"
+                    required
+                  />
                 </div>
+              </div>
+            </div>
 
-                <Button
+            {/* Email Field */}
+            <div className="auth-field-group">
+              <label htmlFor="signup-email" className="auth-label">Email Address</label>
+              <div className="auth-input-container">
+                <span className="auth-input-icon">
+                  <Mail className="w-4 h-4" />
+                </span>
+                <input
+                  id="signup-email"
+                  type="email"
+                  placeholder="alex@university.edu"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="auth-input"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Password Field */}
+            <div className="auth-field-group">
+              <div className="auth-label">
+                <span>Password</span>
+                {password && (
+                  <span className="auth-strength-text">
+                    Strength: <strong style={{ color: '#0f172a' }}>{passwordStrength.label}</strong>
+                  </span>
+                )}
+              </div>
+              <div className="auth-input-container">
+                <span className="auth-input-icon">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  id="signup-password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Min 6 characters"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="auth-input has-toggle"
+                  minLength={6}
+                  required
+                />
+                <button
                   type="button"
-                  onClick={handleGuestContinue}
-                  disabled={!fullName.trim() || !classOrSemester.trim()}
-                  className="w-full h-11 bg-gray-900 hover:bg-gray-800 text-white font-semibold rounded-xl transition-all"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="auth-input-toggle"
+                  title={showPassword ? 'Hide password' : 'Show password'}
                 >
-                  Continue to App (Offline)
-                </Button>
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
 
-                <div className="text-center pt-1">
+              {/* Password Strength Progress */}
+              {password.length > 0 && (
+                <div className="auth-strength-meter">
+                  <div className={`auth-strength-segment ${passwordStrength.score >= 1 ? passwordStrength.style : ''}`} />
+                  <div className={`auth-strength-segment ${passwordStrength.score >= 2 ? passwordStrength.style : ''}`} />
+                  <div className={`auth-strength-segment ${passwordStrength.score >= 3 ? passwordStrength.style : ''}`} />
+                  <div className={`auth-strength-segment ${passwordStrength.score >= 4 ? passwordStrength.style : ''}`} />
+                </div>
+              )}
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isLoading || !fullName.trim() || !classOrSemester.trim() || !email.trim() || password.length < 6}
+              className="auth-submit-btn"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Creating Account...
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  Create Account & Start Tracking
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+
+            {/* Guest Option */}
+            <div className="auth-switch-text">
+              Want to try first without an email?{' '}
+              <button
+                type="button"
+                onClick={() => { setMode('guest'); setErrorMessage(null); }}
+                className="auth-link-btn"
+              >
+                Continue as Guest
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* SIGN IN FORM */}
+        {mode === 'signin' && (
+          <form onSubmit={handleSignIn} className="auth-form">
+            <div className="auth-field-group">
+              <label htmlFor="signin-email" className="auth-label">Email Address</label>
+              <div className="auth-input-container">
+                <span className="auth-input-icon">
+                  <Mail className="w-4 h-4" />
+                </span>
+                <input
+                  id="signin-email"
+                  type="email"
+                  placeholder="student@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="auth-input"
+                  required
+                />
+              </div>
+            </div>
+
+            <div className="auth-field-group">
+              <label htmlFor="signin-password" className="auth-label">Password</label>
+              <div className="auth-input-container">
+                <span className="auth-input-icon">
+                  <Lock className="w-4 h-4" />
+                </span>
+                <input
+                  id="signin-password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="auth-input has-toggle"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="auth-input-toggle"
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isLoading || !email.trim() || !password}
+              className="auth-submit-btn"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Signing In...
+                </>
+              ) : (
+                <>
+                  <Cloud className="w-4 h-4" />
+                  Sign In & Restore Attendance
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
+
+            <div className="auth-switch-text">
+              Don't have an account yet?{' '}
+              <button
+                type="button"
+                onClick={() => { setMode('signup'); setErrorMessage(null); }}
+                className="auth-link-btn"
+              >
+                Create one now
+              </button>
+            </div>
+          </form>
+        )}
+
+        {/* GUEST / OFFLINE FORM */}
+        {mode === 'guest' && (
+          <div className="auth-form">
+            <div style={{ padding: '12px 14px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: '12px', color: '#92400e', fontSize: '12px', lineHeight: '1.4' }}>
+              <strong>Offline Mode:</strong> Your data will be saved locally on this device. You can upgrade to a cloud account anytime from the header to enable automatic backups.
+            </div>
+
+            <div className="auth-field-group">
+              <label htmlFor="guest-name" className="auth-label">Your Name</label>
+              <div className="auth-input-container">
+                <span className="auth-input-icon">
+                  <User className="w-4 h-4" />
+                </span>
+                <input
+                  id="guest-name"
+                  type="text"
+                  placeholder="Enter your name"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="auth-input"
+                />
+              </div>
+            </div>
+
+            <div className="auth-form-row">
+              <div className="auth-field-group">
+                <label className="auth-label">Student Type</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', background: '#f1f5f9', padding: '4px', borderRadius: '10px' }}>
                   <button
                     type="button"
-                    onClick={() => { setMode('signup'); setErrorMessage(null); }}
-                    className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+                    onClick={() => setUserType('school')}
+                    style={{
+                      padding: '8px 0',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      background: userType === 'school' ? '#ffffff' : 'transparent',
+                      color: userType === 'school' ? '#0f172a' : '#64748b',
+                      boxShadow: userType === 'school' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                    }}
                   >
-                    ← Back to Cloud Account Creation
+                    School
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUserType('college')}
+                    style={{
+                      padding: '8px 0',
+                      border: 'none',
+                      borderRadius: '8px',
+                      fontSize: '12px',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      background: userType === 'college' ? '#ffffff' : 'transparent',
+                      color: userType === 'college' ? '#0f172a' : '#64748b',
+                      boxShadow: userType === 'college' ? '0 1px 4px rgba(0,0,0,0.08)' : 'none',
+                    }}
+                  >
+                    College
                   </button>
                 </div>
               </div>
-            )}
-          </CardContent>
-        </Card>
 
-        {/* Footer Security Badge */}
-        <div className="text-center mt-6 flex items-center justify-center gap-1.5 text-[11px] text-gray-400">
-          <ShieldCheck className="w-3.5 h-3.5 text-gray-400" />
+              <div className="auth-field-group">
+                <label htmlFor="guest-class" className="auth-label">
+                  {userType === 'school' ? 'Class' : 'Semester'}
+                </label>
+                <div className="auth-input-container">
+                  <span className="auth-input-icon">
+                    <BookOpen className="w-4 h-4" />
+                  </span>
+                  <input
+                    id="guest-class"
+                    type="text"
+                    placeholder={userType === 'school' ? 'e.g. 10th' : 'e.g. 3rd Sem'}
+                    value={classOrSemester}
+                    onChange={(e) => setClassOrSemester(e.target.value)}
+                    className="auth-input"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleGuestContinue}
+              disabled={!fullName.trim() || !classOrSemester.trim()}
+              className="auth-submit-btn"
+              style={{ background: '#0f172a' }}
+            >
+              Continue to App (Offline)
+            </button>
+
+            <div className="auth-switch-text">
+              <button
+                type="button"
+                onClick={() => { setMode('signup'); setErrorMessage(null); }}
+                className="auth-link-btn"
+              >
+                ← Back to Cloud Account Creation
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Security Footer */}
+        <div className="auth-footer">
+          <ShieldCheck className="w-4 h-4 text-slate-400" />
           <span>Encrypted and secured by Supabase Cloud</span>
         </div>
       </div>
